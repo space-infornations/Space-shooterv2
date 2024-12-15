@@ -682,6 +682,7 @@ function gameLoop() {
   rechargeBattery(); // Recharge battery over time
   drawPlayer();
   drawBullets();
+  adjustVolumeForDevice();
   drawCoins();
   drawEnemies();
   drawScore();
