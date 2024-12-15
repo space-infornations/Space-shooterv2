@@ -649,6 +649,12 @@ function adjustVolumeForDevice() {
   } else if (userAgent.includes("android")) {
     // Android devices might need a lower volume
     bgMusic.volume = 0.2; // Lower volume for Android
+  } else if (userAgent.includes("windows") || userAgent.includes("macintosh")) {
+    // Desktop devices (Windows/Mac)
+    bgMusic.volume = 0.25; // Default volume for desktops
+  } else if (userAgent.includes("tablet")) {
+    // Tablets (more generic check)
+    bgMusic.volume = 0.25; // Lower volume for tablets compared to phones
   } else {
     // Default volume for other devices
     bgMusic.volume = 0.2;
