@@ -95,57 +95,93 @@ function deployBomb(e) {
     }, bombCooldown); // Reset the bomb effect after cooldown
   }
 }
-
 function drawBombEffect() {
-  // Draw bomb explosion effect (temporary visual representation)
   if (isBombDeployed) {
-    const effectDuration = 1000; // Duration of the explosion effect in milliseconds (1 second)
+    const effectDuration = 1000; // Duration of the explosion effect in milliseconds
+    const fadeOutDuration = 200; // Fade-out duration
     const timeElapsed = Date.now() - bombEffectStartTime;
 
-    if (timeElapsed < effectDuration) {
-      const scaleFactor = timeElapsed / effectDuration; // Gradual fade-in and grow
-      const radius = bombEffectRadius * scaleFactor; // Grow the radius over time
-      const opacity = scaleFactor; // Gradually increase opacity from 0 to 1
+    // Calculate scaling of radius
+    const scaleFactor = Math.min(timeElapsed / effectDuration, 1);
+    const radius = bombEffectRadius * scaleFactor;
 
-      // Explosion effect with gradual fade-in and scaling
-      ctx.fillStyle = `rgba(255, 165, 0, ${opacity})`; // Fading in explosion
-      ctx.beginPath();
-      ctx.arc(
-        player.x + player.width / 2,
-        player.y + player.height / 2,
-        radius,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
+    // Calculate opacity for smooth fade-in and fade-out
+    let opacity;
+    if (timeElapsed < effectDuration - fadeOutDuration) {
+      // Smooth fade-in with ease-out curve
+      opacity = 1 - Math.pow(1 - scaleFactor, 3);
     } else {
-      // Reset after the effect duration ends
+      // Smooth fade-out
+      const fadeOutScale =
+        (timeElapsed - (effectDuration - fadeOutDuration)) / fadeOutDuration;
+      opacity = Math.max(0, Math.pow(1 - fadeOutScale, 3));
+    }
+
+    // Create a radial gradient for enhanced visual effect
+    const gradient = ctx.createRadialGradient(
+      player.x + player.width / 2, // Center of the explosion
+      player.y + player.height / 2,
+      0, // Inner radius
+      player.x + player.width / 2,
+      player.y + player.height / 2,
+      radius // Outer radius
+    );
+    gradient.addColorStop(0, `rgba(255, 255, 0, ${opacity})`); // Bright yellow at the center
+    gradient.addColorStop(0.5, `rgba(255, 165, 0, ${opacity * 0.8})`); // Orange mid-point
+    gradient.addColorStop(1, `rgba(255, 69, 0, ${opacity * 0.4})`); // Red at the edges
+
+    // Draw explosion effect with gradient
+    ctx.save(); // Save the canvas state
+    ctx.globalCompositeOperation = "lighter"; // Create a glowing effect by blending
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(
+      player.x + player.width / 2,
+      player.y + player.height / 2,
+      radius,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    // Add additional transparent glow
+    ctx.globalAlpha = opacity * 0.5; // Slight transparency for extra layers
+    ctx.beginPath();
+    ctx.arc(
+      player.x + player.width / 2,
+      player.y + player.height / 2,
+      radius * 1.5, // Slightly larger radius for outer glow
+      0,
+      Math.PI * 2
+    );
+    ctx.fillStyle = `rgba(255, 200, 50, ${opacity * 0.3})`; // Softer glow color
+    ctx.fill();
+    ctx.restore(); // Restore the canvas state
+
+    // Reset after the effect duration ends
+    if (timeElapsed >= effectDuration) {
       isBombDeployed = false;
     }
   }
 }
 
 function movePlayer(e) {
-  if (e.key === "ArrowLeft" || e.key === "a") {
+  if (e.key === "ArrowLeft") {
     player.dx = -player.speed;
-  } else if (e.key === "ArrowRight" || e.key === "d") {
+  } else if (e.key === "ArrowRight") {
     player.dx = player.speed;
   }
 }
-
 function stopPlayer(e) {
-  if (
-    e.key === "ArrowLeft" ||
-    e.key === "a" ||
-    e.key === "ArrowRight" ||
-    e.key === "d"
-  ) {
-    player.dx = 0;
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    player.dx = 0; // Stop horizontal movement
   }
 }
+
 const bulletSound = new Audio("bulletsoundcanon1.mp3"); // Load the bullet sound file
 let isShooting = false; // To track whether the spacebar is being held down
-const shootInterval = 100; // Interval in milliseconds between each shot while holding the spacebar
+const rateOfFire = 10; // Number of shots per second
+const shootInterval = 1000 / rateOfFire; // Interval between shots in milliseconds
 
 function shootBullet(e) {
   const currentTime = Date.now();
@@ -209,7 +245,6 @@ window.addEventListener("keyup", stopShooting);
 
 function updatePlayer() {
   player.x += player.dx;
-
   // Prevent the player from moving off the screen
   if (player.x < 0) player.x = 0;
   if (player.x + player.width > canvas.width)
@@ -229,13 +264,15 @@ function updateBullets() {
 }
 function generateEnemies() {
   if (Math.random() < 0.02) {
+    const hasShield = Math.random() < 0.25; // 25% chance to have a shield
     enemies.push({
       x: Math.random() * (canvas.width - enemyWidth),
       y: -enemyHeight,
       width: enemyWidth,
       height: enemyHeight,
-      speed: 2 + Math.random() * 2,
-      health: 2, // Change the health of each enemy to 2
+      speed: hasShield ? 2 + Math.random() * 1 : 2 + Math.random() * 2, // Slower if shielded
+      health: hasShield ? 1 : 2, // Health is 1 if shielded, otherwise 2
+      shield: hasShield ? 1 : 0, // Shield strength of 1 if shielded, otherwise 0
     });
   }
 }
@@ -334,7 +371,7 @@ function drawCoins() {
   // Enable anti-aliasing for smoother rendering
   ctx.imageSmoothingEnabled = true;
 
-  // Set font and style
+  // Set font and style for text
   ctx.fillStyle = "yellow";
   ctx.font = "20px Arial";
 
@@ -343,7 +380,16 @@ function drawCoins() {
   ctx.shadowBlur = 4;
 
   // Draw the coins text
-  ctx.fillText(`Coins: ${coins}`, 10, 60);
+  ctx.fillText(`${coins}`, 40, 60); // Adjusted position for space for the coin icon
+
+  // Draw a simple coin icon (circle) next to the text
+  ctx.beginPath();
+  ctx.arc(20, 50, 10, 0, Math.PI * 2); // Draw a circle for the coin icon
+  ctx.fillStyle = "gold"; // Set coin color to gold
+  ctx.fill(); // Fill the coin
+  ctx.strokeStyle = "black"; // Outline the coin with black
+  ctx.lineWidth = 2;
+  ctx.stroke(); // Draw the outline
 
   // Reset shadow to avoid affecting other drawings
   ctx.shadowBlur = 0;
@@ -491,6 +537,11 @@ function drawEnemies() {
     ctx.fillStyle = "red";
   }
 }
+// Initialize variables for score and high score
+// Initialize variables for score and high score
+
+let highScore = 0;
+const marginTop = 50; // Set the margin at the top
 
 function drawScore() {
   // Enable anti-aliasing for smoother text
@@ -504,12 +555,24 @@ function drawScore() {
   ctx.shadowColor = "black";
   ctx.shadowBlur = 4;
 
-  // Draw the score text
-  ctx.fillText(`Score: ${score}`, 10, 30);
+  // Draw the score text with margin
+  ctx.fillText(`Score: ${score}`, 10, marginTop + 30);
+
+  // Draw the high score text with margin
+  ctx.fillText(`Highscore: ${highScore}`, 10, marginTop + 60);
 
   // Reset shadow to avoid affecting other drawings
   ctx.shadowBlur = 0;
 }
+
+// Call this function whenever the score is updated to update the high score as well
+function updateScore() {
+  if (score > highScore) {
+    highScore = score; // Update high score if the current score is higher
+  }
+}
+
+// Call this function whenever the score is updated to update the high score as well
 
 function drawPlayerHealthBar() {
   const barWidth = 20; // Width of the health bar
@@ -690,6 +753,7 @@ function gameLoop() {
   drawBombEffect(); // Draw bomb explosion effect if applicable
   drawPlayerHealthBar(); // Draw the player's health bar
   requestAnimationFrame(gameLoop);
+  updateScore();
 }
 
 gameLoop(); // Start the game loop
